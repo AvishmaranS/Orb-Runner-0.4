@@ -1,4 +1,4 @@
-﻿const canvas = document.getElementById("game");
+const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 const scoreEl = document.getElementById("score");
@@ -150,6 +150,9 @@ let pendingHighScore = null;
 let highScorePause = false;
 let runBestThreshold = 0;
 let highScoreTriggered = false;
+let inputMode = "menu";
+let trail = [];
+let nameInputActive = false;
 let lastPowerActive = false;
 
 let audioCtx = null;
@@ -464,6 +467,7 @@ function setOverlay(text, sub, visible) {
   overlaySubEl.textContent = sub;
   overlay.className = visible ? "overlay show centered" : "overlay hide";
   if (visible) keys.clear();
+  inputMode = visible ? "pause" : "game";
 }
 
 function showMenu() {
@@ -471,6 +475,7 @@ function showMenu() {
   menuOverlay.classList.add("show");
   startMenuMusic();
   keys.clear();
+  inputMode = "menu";
 }
 
 function hideMenu() {
@@ -597,6 +602,7 @@ function resetGame() {
   diamondsCount = Number(localStorage.getItem("orbRunnerDiamonds") || 0);
   runBestThreshold = best;
   highScoreTriggered = false;
+  trail = [];
 
   scoreEl.textContent = score;
   levelEl.textContent = level;
@@ -613,6 +619,7 @@ function startGame() {
   resetGame();
   running = true;
   paused = false;
+  inputMode = "game";
   runStart = performance.now();
   lastStamp = performance.now();
   setOverlay("", "", false);
@@ -746,12 +753,23 @@ function updatePlayer(dt, now) {
   }
 
   keepInBounds(player);
+
+  if (trail.length > 18) trail.shift();
+  trail.push({ x: player.x, y: player.y, life: 1 });
 }
 
 function updateMines(dt, now) {
   const freezeFactor = freezeUntil > now ? 0.4 : 1;
 
   for (const mine of mines) {
+    const diff = DIFFICULTY[difficultyMode] || DIFFICULTY.normal;
+    const toPlayerX = player.x - mine.x;
+    const toPlayerY = player.y - mine.y;
+    const dist = Math.max(1, Math.hypot(toPlayerX, toPlayerY));
+    const steer = diff === DIFFICULTY.easy ? 0.0 : diff === DIFFICULTY.normal ? 0.05 : diff === DIFFICULTY.hard ? 0.12 : 0.16;
+    mine.vx += (toPlayerX / dist) * steer;
+    mine.vy += (toPlayerY / dist) * steer;
+
     mine.x += mine.vx * dt * freezeFactor;
     mine.y += mine.vy * dt * freezeFactor;
     mine.spin += dt * 3;
@@ -817,6 +835,7 @@ function updateOrbs() {
 function triggerRevive() {
   reviveActive = true;
   paused = true;
+  inputMode = "revive";
   reviveDeadline = 6;
   reviveTimer = reviveDeadline;
   reviveFillEl.style.width = "100%";
@@ -865,7 +884,7 @@ function renderLeaderboard() {
     .slice(0, 10)
     .map(
       (e, i) =>
-        `<li><span>${i + 1}. ${e.name} | Lv ${e.level} | ${e.mode.toUpperCase()}</span><span>${e.score}</span></li>`
+        `<li><span>${i + 1}. ${e.name} | Lv ${e.level} | ${e.mode.toUpperCase()} | ${e.timePlayed}s</span><span>${e.score}</span></li>`
     )
     .join("");
   if (!entries.length) {
@@ -878,6 +897,8 @@ function openHighScorePrompt(entry) {
   highScoreError.textContent = "";
   highScoreName.value = "";
   highScoreOverlay.classList.remove("hide");
+  inputMode = "highscore";
+  nameInputActive = true;
   if (running && !paused) {
     paused = true;
     highScorePause = true;
@@ -917,19 +938,35 @@ function saveHighScore() {
   renderLeaderboard();
   pendingHighScore = null;
   highScoreOverlay.classList.add("hide");
+  highScoreName.blur();
+  highScoreName.disabled = true;
+  setTimeout(() => {
+    highScoreName.disabled = false;
+    highScoreName.value = "";
+  }, 0);
+  nameInputActive = false;
   if (highScorePause) {
     highScorePause = false;
     paused = false;
   }
+  inputMode = running ? "game" : "menu";
 }
 
 function cancelHighScore() {
   pendingHighScore = null;
   highScoreOverlay.classList.add("hide");
+  highScoreName.blur();
+  highScoreName.disabled = true;
+  setTimeout(() => {
+    highScoreName.disabled = false;
+    highScoreName.value = "";
+  }, 0);
+  nameInputActive = false;
   if (highScorePause) {
     highScorePause = false;
     paused = false;
   }
+  inputMode = running ? "game" : "menu";
 }
 
 function updateGodMode(dt) {
@@ -1293,7 +1330,7 @@ function drawPlayer(stamp) {
     ctx.stroke();
   }
 
-  const glowBoost = 1 + Math.min(level / 20, 0.8);
+  const glowBoost = 1 + Math.min(level / 15, 1.1);
   const color = PLAYER_COLORS[playerColorIndex % PLAYER_COLORS.length];
   const grad = ctx.createRadialGradient(player.x - 4, player.y - 5, 2, player.x, player.y, player.r + 9 * glowBoost);
   grad.addColorStop(0, "#d4f2ff");
@@ -1316,6 +1353,18 @@ function drawPlayer(stamp) {
   ctx.fill();
 }
 
+function drawTrail() {
+  for (let i = 0; i < trail.length; i += 1) {
+    const t = trail[i];
+    const alpha = (i + 1) / trail.length;
+    const r = player.r + 6 * alpha;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgb(120 210 255 / ${0.12 * alpha})`;
+    ctx.fill();
+  }
+}
+
 function render(stamp) {
   drawBackground(stamp);
 
@@ -1323,6 +1372,7 @@ function render(stamp) {
   for (const p of powerUps) drawPowerUp(p);
   for (const d of diamonds) drawDiamond(d);
   for (const mine of mines) drawMine(mine);
+  drawTrail();
   drawPlayer(stamp);
 }
 
@@ -1365,11 +1415,12 @@ function loop(stamp) {
 
 window.addEventListener("keydown", (e) => {
   initAudio();
-  const menuVisible = menuOverlay && !menuOverlay.classList.contains("hide");
-  const pauseVisible = overlay && overlay.classList.contains("show");
-  const reviveVisible = reviveOverlay && !reviveOverlay.classList.contains("hide");
-  const highScoreVisible = highScoreOverlay && !highScoreOverlay.classList.contains("hide");
-  const uiActive = menuVisible || pauseVisible || reviveVisible || highScoreVisible;
+  const menuVisible = inputMode === "menu";
+  const pauseVisible = inputMode === "pause";
+  const reviveVisible = inputMode === "revive";
+  const highScoreVisible = inputMode === "highscore";
+  const uiActive = inputMode !== "game";
+  const inNameInput = highScoreVisible && nameInputActive;
 
   if (!uiActive) {
     keys.add(e.code);
@@ -1381,12 +1432,9 @@ window.addEventListener("keydown", (e) => {
     return all.filter((el) => !el.disabled && el.offsetParent !== null);
   };
 
-  const allowWASDNav = !highScoreVisible;
-  const navKeys = allowWASDNav
-    ? ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"]
-    : ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+  const navKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
 
-  if (uiActive && navKeys.includes(e.code)) {
+  if (uiActive && !inNameInput && navKeys.includes(e.code)) {
     e.preventDefault();
     const root = highScoreVisible ? highScoreOverlay : (reviveVisible ? reviveOverlay : (menuVisible ? menuOverlay : overlay));
     const focusables = getFocusable(root);
@@ -1395,39 +1443,41 @@ window.addEventListener("keydown", (e) => {
     let idx = focusables.indexOf(current);
     if (idx === -1) idx = 0;
 
-    const useHorizontalOnly = reviveVisible || pauseVisible || highScoreVisible;
+  const useHorizontalOnly = reviveVisible || pauseVisible || highScoreVisible;
 
-    if (!useHorizontalOnly && (e.code === "ArrowUp" || e.code === "ArrowDown" || (allowWASDNav && (e.code === "KeyW" || e.code === "KeyS")))) {
-      const dir = (e.code === "ArrowDown" || e.code === "KeyS") ? 1 : -1;
+    if (!useHorizontalOnly && (e.code === "ArrowUp" || e.code === "ArrowDown")) {
+      const dir = e.code === "ArrowDown" ? 1 : -1;
       idx = (idx + dir + focusables.length) % focusables.length;
       focusables[idx].focus();
       return;
     }
 
-    if (e.code === "ArrowLeft" || e.code === "ArrowRight" || (allowWASDNav && (e.code === "KeyA" || e.code === "KeyD"))) {
+    if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
       const el = focusables[idx];
       if (el && el.tagName === "INPUT") {
         const step = Number(el.step || 1);
         const val = Number(el.value);
-        const delta = (e.code === "ArrowRight" || e.code === "KeyD") ? step : -step;
+        const delta = e.code === "ArrowRight" ? step : -step;
         el.value = String(clamp(val + delta, Number(el.min || 0), Number(el.max || 100)));
         el.dispatchEvent(new Event("input", { bubbles: true }));
         return;
       }
       if (useHorizontalOnly) {
-        const dir = (e.code === "ArrowRight" || e.code === "KeyD") ? 1 : -1;
+        const dir = e.code === "ArrowRight" ? 1 : -1;
         idx = (idx + dir + focusables.length) % focusables.length;
         focusables[idx].focus();
         return;
       }
     }
   }
-  const blockKeys = highScoreVisible
-    ? ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"]
-    : ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyW", "KeyA", "KeyS", "KeyD"];
+  const blockKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"];
 
   if (blockKeys.includes(e.code)) {
     e.preventDefault();
+  }
+  if (inNameInput && e.code === "Enter") {
+    e.preventDefault();
+    saveHighScore();
   }
 
   if (e.key === "Enter" && !running) {
