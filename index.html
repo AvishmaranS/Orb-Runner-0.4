@@ -1,0 +1,205 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orb Runner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&family=Press+Start+2P&family=Sora:wght@400;600;700&family=Poppins:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='35%25' cy='30%25' r='70%25'%3E%3Cstop offset='0%25' stop-color='%239ad7ff'/%3E%3Cstop offset='45%25' stop-color='%2345d7ff'/%3E%3Cstop offset='100%25' stop-color='%230b1220'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%230b1220'/%3E%3Ccircle cx='32' cy='32' r='20' fill='url(%23g)'/%3E%3Ccircle cx='24' cy='24' r='5' fill='%23ffffff'/%3E%3Cpath d='M40 18l8 6-4 2-4-3-3 4-2-4z' fill='%23ff5a7a'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Orb Runner</h1>
+    <p class="hint">Move: Arrow Keys / WASD | Boost: Shift | Pause: P or Esc | Restart: R | Mute: M</p>
+
+    <section class="hud">
+      <div>Score: <span id="score">0</span></div>
+      <div>Best: <span id="best">0</span></div>
+      <div>Level: <span id="level">1</span></div>
+      <div>Time: <span id="time">60</span>s</div>
+      <div>Power: <span id="power">None</span></div>
+      <div>Energy: <span id="energyText">100%</span></div>
+      <div>Diamonds: <span id="diamonds">0</span></div>
+    </section>
+
+    <section class="controls">
+      <div class="level-meter-wrap">
+        <div class="meter-label">
+          <span>Level Progress</span>
+          <span id="levelProgressText">0 / 150</span>
+        </div>
+        <div class="meter-track" aria-label="Level progress">
+          <div id="levelProgressFill" class="meter-fill"></div>
+        </div>
+      </div>
+
+      <div class="level-meter-wrap energy-wrap">
+        <div class="meter-label">
+          <span>Boost Energy</span>
+          <span id="energyMeterText">100%</span>
+        </div>
+        <div class="meter-track energy-track" aria-label="Energy meter">
+          <div id="energyMeterFill" class="meter-fill energy-fill"></div>
+        </div>
+      </div>
+
+      <div class="level-meter-wrap power-wrap">
+        <div class="meter-label">
+          <span>Power Duration</span>
+          <span id="powerMeterText">None</span>
+        </div>
+        <div class="meter-track power-track" aria-label="Power meter">
+          <div id="powerMeterFill" class="meter-fill power-fill"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <section class="game-shell">
+      <canvas id="game" width="640" height="400" aria-label="Orb Runner game"></canvas>
+    </section>
+
+    <aside class="legend" aria-label="Powerup legend">
+      <h3>Powerup Legend</h3>
+      <ul>
+        <li><span class="legend-dot shield"></span> Shield: absorb 1 hit</li>
+        <li><span class="legend-dot speed"></span> Speed: faster movement</li>
+        <li><span class="legend-dot freeze"></span> Freeze: slow mines</li>
+        <li><span class="legend-dot time"></span> +Time: +12 seconds</li>
+        <li><span class="legend-dot diamond"></span> Diamond: collect 5 to revive</li>
+      </ul>
+    </aside>
+
+    <section id="overlay" class="overlay hide">
+      <div class="overlay-card">
+        <h2 id="status">Paused</h2>
+        <p id="overlaySub">Press P or Esc to resume.</p>
+        <div class="overlay-buttons">
+          <button id="resumeButton" type="button">Resume</button>
+          <button id="mainMenuButton" type="button">Main Menu</button>
+          <button id="pauseSettingsButton" type="button">Settings</button>
+        </div>
+        <div id="pauseSettings" class="menu-panel hide">
+          <h3>Sound Options</h3>
+          <div class="audio-controls menu-audio no-button">
+            <label for="pauseMusicSlider">Music</label>
+            <input id="pauseMusicSlider" type="range" min="0" max="100" value="60" />
+            <span id="pauseMusicValue">60%</span>
+          </div>
+          <div class="audio-controls menu-audio no-button">
+            <label for="pauseSfxSlider">SFX</label>
+            <input id="pauseSfxSlider" type="range" min="0" max="100" value="70" />
+            <span id="pauseSfxValue">70%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="menuOverlay" class="menu show">
+      <div class="menu-card">
+        <h2 class="menu-title">Orb Runner</h2>
+        <div class="menu-buttons">
+          <button id="startButton" type="button">Start Game</button>
+          <button id="settingsButton" type="button">Settings</button>
+          <button id="leaderboardsButton" type="button">Leaderboards</button>
+          <button id="creditsButton" type="button">Credits</button>
+        </div>
+
+        <div id="menuSettings" class="menu-panel hide">
+          <div class="settings-group">
+            <button id="toggleSoundSettings" class="settings-toggle" type="button">Sound Settings</button>
+            <div id="soundSettingsPanel" class="settings-panel hide">
+              <div class="audio-controls menu-audio">
+                <button id="menuMuteButton" type="button">Mute</button>
+                <label for="menuVolumeSlider">Master</label>
+                <input id="menuVolumeSlider" type="range" min="0" max="100" value="70" />
+                <span id="menuVolumeValue">70%</span>
+              </div>
+              <div class="audio-controls menu-audio no-button">
+                <label for="menuMusicSlider">Music</label>
+                <input id="menuMusicSlider" type="range" min="0" max="100" value="60" />
+                <span id="menuMusicValue">60%</span>
+              </div>
+              <div class="audio-controls menu-audio no-button">
+                <label for="menuSfxSlider">SFX</label>
+                <input id="menuSfxSlider" type="range" min="0" max="100" value="70" />
+                <span id="menuSfxValue">70%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <button id="toggleDifficultySettings" class="settings-toggle" type="button">Difficulty</button>
+            <div id="difficultyPanel" class="settings-panel hide">
+              <div class="difficulty">
+                <button data-difficulty="easy" type="button">Easy</button>
+                <button data-difficulty="normal" type="button" class="active">Normal</button>
+                <button data-difficulty="hard" type="button">Hard</button>
+                <button data-difficulty="god" type="button">God Mode</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="menuCredits" class="menu-panel hide">
+          <h3>Credits</h3>
+          <p>Developed by Avishmaran</p>
+        </div>
+
+        <div id="menuLeaderboards" class="menu-panel hide">
+          <h3>Leaderboards</h3>
+          <ul id="leaderboardList" class="leaderboard"></ul>
+          <button id="resetLeaderboardButton" class="settings-toggle" type="button">Reset Leaderboards</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="reviveOverlay" class="revive hide" aria-live="polite">
+      <div class="revive-card">
+        <h3>Revive?</h3>
+        <p>Spend 5 diamonds to revive.</p>
+        <div class="meter-track revive-track" aria-label="Revive timer">
+          <div id="reviveFill" class="meter-fill revive-fill"></div>
+        </div>
+        <p id="reviveTimerText">6.0s</p>
+        <p id="reviveError" class="revive-error"></p>
+        <button id="reviveClose" class="revive-close" type="button" aria-label="Close" tabindex="1">✕</button>
+        <div class="revive-buttons">
+          <button id="reviveYes" type="button" tabindex="2">Revive</button>
+          <button id="reviveRetry" type="button" tabindex="3">Retry</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="highScoreOverlay" class="revive hide" aria-live="polite">
+      <div class="revive-card">
+        <h3>New High Score!</h3>
+        <p>Enter your name</p>
+        <button id="highScoreClose" class="revive-close" type="button" aria-label="Close" tabindex="1">✕</button>
+        <input id="highScoreName" class="name-input" type="text" maxlength="16" placeholder="Name" />
+        <p id="highScoreError" class="revive-error"></p>
+        <div class="revive-buttons">
+          <button id="highScoreSave" type="button" tabindex="2">Save</button>
+          <button id="highScoreCancel" type="button" tabindex="3">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="resetConfirmOverlay" class="revive hide" aria-live="polite">
+      <div class="revive-card">
+        <h3>Reset Leaderboards?</h3>
+        <p>This will clear all leaderboard records.</p>
+        <div class="revive-buttons">
+          <button id="resetConfirmYes" type="button">Yes, reset</button>
+          <button id="resetConfirmNo" type="button">Cancel</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
